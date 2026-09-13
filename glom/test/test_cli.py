@@ -172,3 +172,47 @@ def test_main(tmp_path):
     os.chdir(str(tmp_path))
     res = subprocess.check_output(['glom', 'a', '{"a": 3}'])
     assert res.decode('utf8') in ('3\n', '3\r\n')  # unix or windows line end okay
+
+
+def test_console_main_success(monkeypatch):
+    monkeypatch.setenv('GLOM_CLI_DEBUG', '1')
+    monkeypatch.setattr(cli, 'main', lambda argv: 0)
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.console_main()
+
+    assert excinfo.value.code == 0
+
+
+def test_console_main_exception_debug(monkeypatch):
+    monkeypatch.setenv('GLOM_CLI_DEBUG', '1')
+
+    error = RuntimeError('test error')
+    post_mortem_called = False
+
+    def fake_main(argv):
+        raise error
+
+    def fake_post_mortem():
+        nonlocal post_mortem_called
+        post_mortem_called = True
+
+    monkeypatch.setattr(cli, 'main', fake_main)
+    monkeypatch.setattr('pdb.post_mortem', fake_post_mortem)
+
+    with pytest.raises(RuntimeError, match='test error'):
+        cli.console_main()
+
+    assert post_mortem_called
+
+
+def test_console_main_exception_without_debug(monkeypatch):
+    monkeypatch.delenv('GLOM_CLI_DEBUG', raising=False)
+
+    def fake_main(argv):
+        raise RuntimeError('test error')
+
+    monkeypatch.setattr(cli, 'main', fake_main)
+
+    with pytest.raises(RuntimeError, match='test error'):
+        cli.console_main()
